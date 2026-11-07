@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "Oligar",
+  "short_name": "Oligar",
+  "description": "Gestión de cotizaciones, productos y clientes.",
+  "lang": "es-MX",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF2F1",
+  "theme_color": "#0F6B5E",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
