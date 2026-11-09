@@ -1,58 +1,35 @@
-const CACHE_NAME = "oligar-pwa-v1";
-const APP_SHELL = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./icon-192.png",
-  "./icon-512.png",
-  "./apple-touch-icon.png"
-];
-
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+/* Oligar - service worker. Sube el número de versión si cambias la lista SHELL. */
+var V = "oligar-v20";
+var SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+self.addEventListener("install", function(e){
+  e.waitUntil(caches.open(V).then(function(c){ return c.addAll(SHELL); }).then(function(){ return self.skipWaiting(); }));
 });
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener("activate", function(e){
+  e.waitUntil(caches.keys().then(function(ks){ return Promise.all(ks.filter(function(k){ return k !== V; }).map(function(k){ return caches.delete(k); })); }).then(function(){ return self.clients.claim(); }));
 });
-
-self.addEventListener("fetch", event => {
-  const request = event.request;
-  const url = new URL(request.url);
-
-  // No interceptar Firebase, Google APIs ni otros servicios externos.
-  if (url.origin !== self.location.origin) return;
-
-  // Para navegar: intenta obtener la versión más reciente y usa la copia local si no hay red.
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request).then(response => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
-        }
-        return response;
-      }).catch(() => caches.match("./index.html"))
+self.addEventListener("fetch", function(e){
+  var req = e.request;
+  if(req.method !== "GET") return;
+  var url = new URL(req.url);
+  if(url.origin === self.location.origin){
+    /* Archivos propios: primero la red (así llegan las actualizaciones solas); sin internet, la copia guardada. */
+    e.respondWith(
+      fetch(req, {cache:"no-cache"}).then(function(res){
+        if(res && res.ok){ var cp = res.clone(); caches.open(V).then(function(c){ c.put(req, cp); }); }
+        return res;
+      }).catch(function(){
+        return caches.match(req).then(function(r){ return r || caches.match("index.html") || caches.match("./"); });
+      })
     );
     return;
   }
-
-  // Archivos de la interfaz: primero caché, después red.
-  event.respondWith(
-    caches.match(request).then(cached => cached || fetch(request).then(response => {
-      if (response && response.ok && request.method === "GET") {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-      }
-      return response;
-    }))
-  );
+  if(url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com"){
+    e.respondWith(caches.open(V).then(function(c){
+      return c.match(req).then(function(hit){
+        var net = fetch(req).then(function(res){ if(res && (res.ok || res.type === "opaque")) c.put(req, res.clone()); return res; }).catch(function(){ return hit; });
+        return hit || net;
+      });
+    }));
+  }
+  /* Firebase, Firestore y demás servicios van directo a internet, sin tocarlos. */
 });

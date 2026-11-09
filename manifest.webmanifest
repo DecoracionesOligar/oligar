@@ -1,27 +1,32 @@
 {
-  "id": "./",
   "name": "Oligar",
   "short_name": "Oligar",
-  "description": "Gestión de cotizaciones, productos y clientes.",
-  "lang": "es-MX",
+  "description": "Cotizaciones, citas y precios de Decoraciones Oligar",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#EEF2F1",
-  "theme_color": "#0F6B5E",
+  "background_color": "#ffffff",
+  "theme_color": "#0D1413",
+  "lang": "es-MX",
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
