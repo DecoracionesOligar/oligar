@@ -1504,7 +1504,8 @@ function renderMenu(){
     '<div class="actions"><button class="btn small" type="button" id="exp-xls">Exportar a Excel</button>' +
     '<button class="btn ghost small" type="button" id="exp-bak">Respaldo</button>' +
     '<button class="btn ghost small" type="button" id="imp-btn">Importar</button>' +
-    '<button class="btn ghost small" type="button" id="sync-now">Sincronizar</button></div>' +
+    '<button class="btn ghost small" type="button" id="sync-now">Sincronizar</button>' +
+    '<button class="btn ghost small" type="button" id="force-up">Subir todo a la nube</button></div>' +
     '<input id="imp-file" type="file" accept=".json,application/json" hidden>' +
     '<div><button class="link danger" type="button" id="logout">Cerrar sesión</button></div></section>' +
     '<div><button class="link accent" type="button" id="menu-back">‹ Volver</button></div>';
@@ -2017,6 +2018,7 @@ $("#app").addEventListener("click", function(e){
   if(t.id === "exp-xls"){ exportExcel(); return; }
   if(t.id === "exp-bak"){ exportBackup(); return; }
   if(t.id === "imp-btn"){ var fi = $("#imp-file"); if(fi) fi.click(); return; }
+  if(t.id === "force-up"){ forceUp(); return; }
   if(t.id === "sync-now"){ if(auth) syncNow(); else toast("Entra a tu cuenta primero"); return; }
   if(t.id === "logout"){ ask("¿Cerrar sesión? Tus datos siguen en este teléfono y en la nube.", "Cerrar sesión", function(){ doSignOut(false); }); return; }
   if(t.id === "start-appt"){ apptReturn = view; apptDraft = blankAppt(); go("new"); return; }
@@ -2221,6 +2223,7 @@ function pullAll(remote){
   var changed = false;
   ["q", "a"].forEach(function(k){
     var arr = k === "q" ? db.quotes : db.appts, byId = {}, rem = {}, map = sy[k];
+    var emptyRemote = !(remote[k] && remote[k].length);
     arr.forEach(function(x){ byId[x.id] = x; });
     remote[k].forEach(function(d){ var j = docJ(d); if(j != null) rem[docId(d)] = j; });
     Object.keys(rem).forEach(function(id){
@@ -2239,7 +2242,7 @@ function pullAll(remote){
     Object.keys(map).forEach(function(id){
       if(rem[id] !== undefined) return;
       var L = byId[id];
-      if(L && hsh(JSON.stringify(L)) === map[id]){ arr.splice(arr.indexOf(L), 1); changed = true; }
+      if(L && !emptyRemote && hsh(JSON.stringify(L)) === map[id]){ arr.splice(arr.indexOf(L), 1); changed = true; }
       delete map[id];
     });
   });
@@ -2287,6 +2290,7 @@ function syncNow(){
   syncBusy = true; setSync("Sincronizando…");
   return fsGet("meta/state").then(function(st){
     var rev = st && st.fields && st.fields.rev ? st.fields.rev.stringValue : null;
+    if(rev === null && sy.rev){ sy.q = {}; sy.a = {}; sy.p = null; }
     if(rev !== sy.rev || sy.p == null){
       return Promise.all([fsList("quotes"), fsList("appts"), fsGet("meta/prices")]).then(function(r){
         if(pullAll({q:r[0], a:r[1], p:r[2]})){ saveLocal(); refreshViews(); }
@@ -2308,6 +2312,23 @@ function syncNow(){
     if(e.offline) setSync("Sin conexión. Se guardará al volver internet.");
     else if(e.status === 403) setSync("Sin permiso en la nube. Revisa las reglas de Firestore.");
     else setSync("No se pudo sincronizar: " + (e.message || "error"));
+  });
+}
+function forceUp(){
+  if(!auth){ toast("Entra a tu cuenta primero"); return; }
+  if(syncBusy){ toast("Espera, se está sincronizando"); return; }
+  syncBusy = true; setSync("Subiendo todo a la nube…");
+  sy.q = {}; sy.a = {}; sy.p = null;
+  pushAll().then(function(){
+    var rev = uid();
+    return fs("meta/state?updateMask.fieldPaths=rev", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({fields:{rev:{stringValue:rev}}})}).then(function(){ sy.rev = rev; });
+  }).then(function(){
+    lsSet(SYNC_KEY, sy); syncBusy = false;
+    setSync("Todo subido a la nube " + new Date().toLocaleTimeString("es-MX", {hour:"numeric", minute:"2-digit"}));
+    toast("Todo se subió a la nube");
+  }, function(e){
+    lsSet(SYNC_KEY, sy); syncBusy = false;
+    setSync(e.offline ? "Sin conexión. Intenta de nuevo con internet." : e.status === 403 ? "Sin permiso en la nube. Revisa las reglas de Firestore." : "No se pudo subir: " + (e.message || "error"));
   });
 }
 function scheduleSync(){ if(!auth) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 1200); }
