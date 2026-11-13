@@ -1204,7 +1204,6 @@ function gcalDate(d){
   function z(n){ return String(n).padStart(2, "0"); }
   return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "T" + z(d.getHours()) + z(d.getMinutes()) + "00";
 }
-function telOf(p){ var d = String(p || "").replace(/[^\d+]/g, ""); return d.replace(/\+/g, function(m, i){ return i === 0 ? m : ""; }).length >= 7 ? d : ""; }
 function gcalUrl(a){
   var s = apptDate(a); if(!s || !isFinite(s.getTime())) return "";
   if(!a.time) s.setHours(9, 0, 0, 0);
@@ -1234,7 +1233,7 @@ function openLinks(title, text, links){
   };
 }
 function apptHtml(a){
-  var ad = fullAddr(a), mp = mapsUrl(a), st = apptState(a);
+  var ad = fullAddr(a), cal = gcalUrl(a), mp = mapsUrl(a), st = apptState(a);
   var q = a.quoteId ? db.quotes.filter(function(x){ return x.id === a.quoteId; })[0] : null;
   return '<div class="quote s-' + st + '" data-aid="' + esc(a.id) + '"><div class="between"><b>' + esc(a.name || a.phone || "Sin nombre") + '</b><span class="tag ' + ST_LABEL[st][1] + '">' + (a.done ? "✓ " : "") + ST_LABEL[st][0] + '</span></div>' +
     '<div class="info">' + esc(apptWhen(a)) + '</div>' +
@@ -1246,7 +1245,7 @@ function apptHtml(a){
     '<button class="btn ghost small" type="button" data-act="a-edit">Editar</button>' +
     '<button class="btn ghost small" type="button" data-act="a-done">' + (a.done ? "Reabrir" : "Marcar realizada") + '</button>' +
     '<button class="btn ghost small" type="button" data-act="a-wa">WhatsApp</button>' +
-    (telOf(a.phone) ? '<button class="btn ghost small" type="button" data-act="call" data-tel="' + esc(telOf(a.phone)) + '">Llamar</button>' : '') +
+    (cal ? '<button class="btn ghost small" type="button" data-act="a-cal">Calendario</button>' : '') +
     (mp ? '<button class="btn ghost small" type="button" data-act="a-maps">Maps</button>' : '') +
     '<button class="link danger" type="button" data-act="a-del">Borrar</button></div>' +
     (a.done ? '' : '<div class="swhint">← Desliza para marcar como realizada</div>') + '</div>';
@@ -1505,8 +1504,7 @@ function renderMenu(){
     '<div class="actions"><button class="btn small" type="button" id="exp-xls">Exportar a Excel</button>' +
     '<button class="btn ghost small" type="button" id="exp-bak">Respaldo</button>' +
     '<button class="btn ghost small" type="button" id="imp-btn">Importar</button>' +
-    '<button class="btn ghost small" type="button" id="sync-now">Sincronizar</button>' +
-    '<button class="btn ghost small" type="button" id="force-up">Subir todo a la nube</button></div>' +
+    '<button class="btn ghost small" type="button" id="sync-now">Sincronizar</button></div>' +
     '<input id="imp-file" type="file" accept=".json,application/json" hidden>' +
     '<div><button class="link danger" type="button" id="logout">Cerrar sesión</button></div></section>' +
     '<div><button class="link accent" type="button" id="menu-back">‹ Volver</button></div>';
@@ -1728,7 +1726,7 @@ function fillSaved(){
       '<span class="info" style="display:block">' + counts.join(" · ") + (contact ? " · " + esc(contact) : "") + '</span>' +
       (g.quotes[0] ? '<span class="gsum"><b>' + money(g.quotes[0].total) + '</b>' + payTag(g.quotes[0]) + (shortItems(g.quotes[0]) ? '<small>' + esc(shortItems(g.quotes[0])) + '</small>' : '') + '</span>' : '') +
       '</span></summary>' +
-      '<div class="gbody"><div class="actions"><button class="btn small" type="button" data-act="newfor" data-gk="' + esc(g.key) + '">+ Nueva cotización para este cliente</button>' + (telOf(g.client.phone) ? '<button class="btn ghost small" type="button" data-act="call" data-tel="' + esc(telOf(g.client.phone)) + '">Llamar</button>' : '') + '</div>' +
+      '<div class="gbody"><div class="actions"><button class="btn small" type="button" data-act="newfor" data-gk="' + esc(g.key) + '">+ Nueva cotización para este cliente</button></div>' +
       g.appts.map(apptHtml).join("") +
       g.quotes.map(function(x){
         var paid = paidOf(x), rest = Math.max(0, x.total - paid);
@@ -2019,7 +2017,6 @@ $("#app").addEventListener("click", function(e){
   if(t.id === "exp-xls"){ exportExcel(); return; }
   if(t.id === "exp-bak"){ exportBackup(); return; }
   if(t.id === "imp-btn"){ var fi = $("#imp-file"); if(fi) fi.click(); return; }
-  if(t.id === "force-up"){ forceUp(); return; }
   if(t.id === "sync-now"){ if(auth) syncNow(); else toast("Entra a tu cuenta primero"); return; }
   if(t.id === "logout"){ ask("¿Cerrar sesión? Tus datos siguen en este teléfono y en la nube.", "Cerrar sesión", function(){ doSignOut(false); }); return; }
   if(t.id === "start-appt"){ apptReturn = view; apptDraft = blankAppt(); go("new"); return; }
@@ -2109,7 +2106,6 @@ $("#app").addEventListener("click", function(e){
       db.products = db.products.filter(function(x){ return x.id !== p.id; }); persist(); renderPrices(); }); }
     return;
   }
-  if(act === "call"){ if(b.dataset.tel) window.location.href = "tel:" + b.dataset.tel; return; }
   if(act === "newfor"){ newForClient(b.dataset.gk); return; }
   var ad = b.closest("[data-aid]");
   if(ad){
@@ -2225,7 +2221,6 @@ function pullAll(remote){
   var changed = false;
   ["q", "a"].forEach(function(k){
     var arr = k === "q" ? db.quotes : db.appts, byId = {}, rem = {}, map = sy[k];
-    var emptyRemote = !(remote[k] && remote[k].length);
     arr.forEach(function(x){ byId[x.id] = x; });
     remote[k].forEach(function(d){ var j = docJ(d); if(j != null) rem[docId(d)] = j; });
     Object.keys(rem).forEach(function(id){
@@ -2244,7 +2239,7 @@ function pullAll(remote){
     Object.keys(map).forEach(function(id){
       if(rem[id] !== undefined) return;
       var L = byId[id];
-      if(L && !emptyRemote && hsh(JSON.stringify(L)) === map[id]){ arr.splice(arr.indexOf(L), 1); changed = true; }
+      if(L && hsh(JSON.stringify(L)) === map[id]){ arr.splice(arr.indexOf(L), 1); changed = true; }
       delete map[id];
     });
   });
@@ -2292,7 +2287,6 @@ function syncNow(){
   syncBusy = true; setSync("Sincronizando…");
   return fsGet("meta/state").then(function(st){
     var rev = st && st.fields && st.fields.rev ? st.fields.rev.stringValue : null;
-    if(rev === null && sy.rev){ sy.q = {}; sy.a = {}; sy.p = null; }
     if(rev !== sy.rev || sy.p == null){
       return Promise.all([fsList("quotes"), fsList("appts"), fsGet("meta/prices")]).then(function(r){
         if(pullAll({q:r[0], a:r[1], p:r[2]})){ saveLocal(); refreshViews(); }
@@ -2314,23 +2308,6 @@ function syncNow(){
     if(e.offline) setSync("Sin conexión. Se guardará al volver internet.");
     else if(e.status === 403) setSync("Sin permiso en la nube. Revisa las reglas de Firestore.");
     else setSync("No se pudo sincronizar: " + (e.message || "error"));
-  });
-}
-function forceUp(){
-  if(!auth){ toast("Entra a tu cuenta primero"); return; }
-  if(syncBusy){ toast("Espera, se está sincronizando"); return; }
-  syncBusy = true; setSync("Subiendo todo a la nube…");
-  sy.q = {}; sy.a = {}; sy.p = null;
-  pushAll().then(function(){
-    var rev = uid();
-    return fs("meta/state?updateMask.fieldPaths=rev", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({fields:{rev:{stringValue:rev}}})}).then(function(){ sy.rev = rev; });
-  }).then(function(){
-    lsSet(SYNC_KEY, sy); syncBusy = false;
-    setSync("Todo subido a la nube " + new Date().toLocaleTimeString("es-MX", {hour:"numeric", minute:"2-digit"}));
-    toast("Todo se subió a la nube");
-  }, function(e){
-    lsSet(SYNC_KEY, sy); syncBusy = false;
-    setSync(e.offline ? "Sin conexión. Intenta de nuevo con internet." : e.status === 403 ? "Sin permiso en la nube. Revisa las reglas de Firestore." : "No se pudo subir: " + (e.message || "error"));
   });
 }
 function scheduleSync(){ if(!auth) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 1200); }
